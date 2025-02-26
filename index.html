@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fa">
 <head>
@@ -10,7 +9,7 @@
 
         body {
             font-family: 'Orbitron', sans-serif;
-            background-image: url('https://example.com/rafael-background.jpg'); /* Replace with actual Rafael background image URL */
+            background-image: url('/mnt/data/file-5Jm43gmphW49hZttLaxt5M'); /* استفاده از تصویر آپلود شده */
             background-size: cover;
             color: #ffffff;
             margin: 0;
@@ -26,24 +25,14 @@
             background: rgba(0, 0, 0, 0.8);
             border-radius: 15px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            position: relative;
-            border: 5px solid; 
-            animation: borderAnimation 1s infinite; 
-        }
-
-        @keyframes borderAnimation {
-            0% { border-color: #00ffff; } /* آبی اسمونی */
-            25% { border-color: #00ffff; }
-            50% { border-color: #00ffff; }
-            75% { border-color: #00ffff; }
-            100% { border-color: #00ffff; }
+            border: 5px solid #00ffff;
         }
 
         h1 {
             font-size: 36px;
             margin-bottom: 20px;
-            color: #00ffff; /* رنگ سایه نئونی */
-            text-shadow: 0 0 20px #00ffff, 0 0 30px #00ffff; 
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff, 0 0 30px #00ffff;
             animation: neon 1s infinite alternate;
         }
 
@@ -54,73 +43,51 @@
 
         .clock {
             font-size: 24px;
-            margin: 20px 0;
             color: #00ffff;
             text-shadow: 0 0 20px #00ffff, 0 0 30px #00ffff;
         }
 
         .dns-code {
             font-size: 18px;
-            font-family: 'Orbitron', sans-serif; 
             background: #333;
             padding: 10px;
             border-radius: 10px;
-            margin: 10px 0;
-            color: #00ffff; /* تغییر رنگ به آبی اسمونی */
+            color: #00ffff;
             display: inline-block;
             text-shadow: 0 0 20px #00ffff, 0 0 30px #00ffff;
         }
 
-        .copy-button {
-            background-color: #00ffff; /* تغییر رنگ به آبی اسمونی */
-            color: #1b1b2f;
-            border: none;
-            padding: 5px 10px;
-            font-size: 14px;
-            cursor: pointer;
-            border-radius: 5px;
-            margin-top: 5px;
-            animation: neon 1s infinite alternate;
-        }
-
-        .copy-button:hover {
-            background-color: #00cccc; /* رنگ روشن‌تر هنگام هاور */
-        }
-
-        footer {
-            margin-top: 30px;
-            font-size: 16px;
-            color: #00ffff; /* تغییر رنگ به آبی اسمونی */
-        }
-
-        button {
-            background-color: #00ffff; /* تغییر رنگ به آبی اسمونی */
+        .copy-button, button {
+            background-color: #00ffff;
             color: #1b1b2f;
             border: none;
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
             border-radius: 5px;
-            margin-top: 20px;
+            margin-top: 10px;
+            animation: neon 1s infinite alternate;
         }
 
-        button:hover {
-            background-color: #00cccc; /* رنگ روشن‌تر هنگام هاور */
+        button:hover, .copy-button:hover {
+            background-color: #00cccc;
+        }
+
+        select {
+            background: #000;
+            color: #00ffff;
+            border: 2px solid #00ffff;
+            padding: 5px;
+            font-size: 16px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px #00ffff;
         }
     </style>
 </head>
 <body>
-    <div class="container" id="login-container">
-        <h1>ورود به سیستم</h1>
-        <input type="text" id="username" placeholder="نام کاربری" />
-        <input type="password" id="password" placeholder="پسورد" />
-        <button onclick="login()">ورود</button>
+    <div class="container" id="dns-container">
+        <h1>TOFAN</h1>
         <div class="clock" id="clock"></div>
-    </div>
-
-    <div class="container" id="dns-container" style="display: none;">
-        <h1>RAFAEL</h1>
-        <div class="clock" id="clock-dns"></div>
         <label for="country">نوع کشور:</label>
         <select id="country">
             <option value="فنلاند">فنلاند</option>
@@ -133,22 +100,62 @@
         <label for="dns-count">چند کد بسازم؟</label>
         <input type="number" id="dns-count" min="1" value="5" />
         <br>
-        <label for="dns-duration">مدت زمان DNS (روز):</label>
-        <input type="number" id="dns-duration" min="1" value="7" />
-        <br>
         <button onclick="generateDNSCodes()">تولید کدها</button>
         <div id="generated-dns" style="margin-top: 20px;"></div>
-        <footer>
-          @RAFAELxPUBGM خز شد توسط چنل:
-        </footer>
     </div>
 
     <script>
-        function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            if (username === 'RAFAEL' && password === 'RAFAEL') {
-                document.getElementById('login-container').style.display = 'none';
+        function startClock() {
+            const clockElement = document.getElementById('clock');
+            setInterval(() => {
+                const now = new Date();
+                clockElement.textContent = now.toLocaleTimeString('fa-IR');
+            }, 1000);
+        }
+
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function generateRandomIPv4() {
+            return `${getRandomInt(1, 223)}.${getRandomInt(0, 255)}.${getRandomInt(0, 255)}.${getRandomInt(1, 254)}`;
+        }
+
+        function generateRandomIPv6() {
+            const randomPart1 = getRandomInt(0, 999).toString(16);
+            const randomPart2 = getRandomInt(0, 999).toString(16);
+            return `${randomPart1}:${randomPart2}:5641::${getRandomInt(0, 1)}`;
+        }
+
+        function generateDNSCodes() {
+            const container = document.getElementById('generated-dns');
+            const n = document.getElementById('dns-count').value;
+            container.innerHTML = '';
+            for (let i = 0; i < n; i++) {
+                const ipv4Code = generateRandomIPv4();
+                const ipv6Code = generateRandomIPv6();
+                const div = document.createElement('div');
+                div.className = 'dns-code';
+                div.textContent = `${ipv4Code} | ${ipv6Code}`;
+
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.textContent = 'کپی';
+                copyButton.onclick = () => {
+                    navigator.clipboard.writeText(div.textContent);
+                    alert('کپی شد: ' + div.textContent);
+                };
+
+                div.appendChild(copyButton);
+                container.appendChild(div);
+            }
+        }
+
+        startClock();
+    </script>
+</body>
+</html>
+le.display = 'none';
                 document.getElementById('dns-container').style.display = 'block';
                 startClock(); 
                 startDNSClock(); 
