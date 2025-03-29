@@ -435,7 +435,7 @@ def error_handler(update: Update, context: CallbackContext):
 
 # --- تنظیمات اصلی ---
 def main():
-    TOKEN = "7917078197:AAGEsXwOlhcGsHryK87cx8VGPace1s_ewXo"  # توکن شما
+    TOKEN = "7883574761:AAGVOkt-aF5zFFy9G2AGIXSElEkliLbarUc"  # توکن شما
     updater = Updater(TOKEN, use_context=True)
     dispatcher = updater.dispatcher
     
