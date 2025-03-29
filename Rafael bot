@@ -1,0 +1,484 @@
+import logging
+import random
+from datetime import datetime
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    Filters,
+    CallbackContext,
+    ConversationHandler,
+)
+
+# تنظیمات لاگ
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# حالت‌های گفتگو
+PASSWORD, COUNTRY, GAME, ADMIN_PANEL, BAN_USER, UNBAN_USER = range(6)
+
+# تنظیمات اولیه
+ADMIN_USER_ID = 5874501550  # جایگزین با آی دی عددی خودتان
+CORRECT_PASSWORD = "RAFAEL"
+ADMIN_PASSWORD = "ADMIN123"
+
+# ساختار داده‌ای DNS و تاریخچه
+DNS_HISTORY = set()  # برای جلوگیری از تکرار DNSها
+
+# سیستم مدیریت کاربران
+user_stats = {}
+BLOCKED_USERS = set()
+ACTIVITY_LOG = []
+
+def generate_unique_dns(country: str) -> str:
+    """تولید DNS منحصر به فرد برای کشور مورد نظر"""
+    while True:
+        if country == "آمریکا":
+            # تولید IP تصادفی با فرمت 1.1.1.1 تا 223.255.255.255
+            parts = [
+                random.randint(1, 223),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "کانادا":
+            parts = [
+                random.choice([24, 70, 104]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "انگلیس":
+            parts = [
+                random.choice([51, 78, 85]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "آلمان":
+            parts = [
+                random.choice([5, 46, 62]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "فرانسه":
+            parts = [
+                random.choice([163, 176, 195]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "ترکیه":
+            parts = [
+                random.choice([176, 178, 185]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "روسیه":
+            parts = [
+                random.choice([91, 95, 109]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "سنگاپور":
+            parts = [
+                random.choice([165, 175, 203]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "هند":
+            parts = [
+                random.choice([202, 203, 223]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        elif country == "ژاپن":
+            parts = [
+                random.choice([210, 219, 220]),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        else:
+            # حالت پیشفرض برای کشورهای نامشخص
+            parts = [
+                random.randint(1, 223),
+                random.randint(0, 255),
+                random.randint(0, 255),
+                random.randint(1, 255)
+            ]
+        
+        dns = f"{parts[0]}.{parts[1]}.{parts[2]}.{parts[3]}"
+        
+        # بررسی منحصر به فرد بودن DNS
+        if dns not in DNS_HISTORY:
+            DNS_HISTORY.add(dns)
+            return dns
+
+# لیست کشورها
+COUNTRIES = [
+    "آمریکا", "کانادا", "انگلیس", "آلمان", "فرانسه",
+    "ترکیه", "روسیه", "سنگاپور", "هند", "ژاپن"
+]
+
+# --- توابع اصلی ---
+def start(update: Update, context: CallbackContext) -> int:
+    user_id = update.effective_user.id
+    
+    if user_id in BLOCKED_USERS:
+        update.message.reply_text("⛔ حساب شما مسدود شده است!")
+        return ConversationHandler.END
+        
+    if user_id not in user_stats:
+        user_stats[user_id] = {
+            'usage': 0,
+            'last_active': datetime.now(),
+            'last_country': None
+        }
+    else:
+        user_stats[user_id]['last_active'] = datetime.now()
+    
+    ACTIVITY_LOG.append({
+        'user_id': user_id,
+        'action': 'start',
+        'time': datetime.now()
+    })
+    
+    update.message.reply_text("🔐 لطفا رمز عبور را وارد کنید:")
+    return PASSWORD
+
+def check_password(update: Update, context: CallbackContext) -> int:
+    user_id = update.effective_user.id
+    user_password = update.message.text
+    
+    if user_password == ADMIN_PASSWORD and user_id == ADMIN_USER_ID:
+        return admin_panel(update, context)
+    elif user_password == CORRECT_PASSWORD:
+        return show_countries(update, context)
+    else:
+        update.message.reply_text("❌ رمز عبور اشتباه است!")
+        return ConversationHandler.END
+
+def show_countries(update: Update, context: CallbackContext) -> int:
+    keyboard = []
+    
+    for i in range(0, len(COUNTRIES), 2):
+        row = []
+        if i < len(COUNTRIES):
+            row.append(InlineKeyboardButton(
+                f"🌍 {COUNTRIES[i]}", 
+                callback_data=f"country_{COUNTRIES[i]}"
+            ))
+        if i+1 < len(COUNTRIES):
+            row.append(InlineKeyboardButton(
+                f"🌎 {COUNTRIES[i+1]}", 
+                callback_data=f"country_{COUNTRIES[i+1]}"
+            ))
+        keyboard.append(row)
+    
+    if update.effective_user.id == ADMIN_USER_ID:
+        keyboard.append([InlineKeyboardButton("🛠 پنل مدیریت", callback_data="admin_panel")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        update.callback_query.edit_message_text(
+            text="🔻 لطفا یک کشور را انتخاب کنید:",
+            reply_markup=reply_markup
+        )
+    else:
+        update.message.reply_text(
+            "🔻 لطفا یک کشور را انتخاب کنید:",
+            reply_markup=reply_markup
+        )
+    
+    return COUNTRY
+
+def select_game(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    
+    country = query.data.split('_')[1]
+    context.user_data['selected_country'] = country
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🎮 پابجی", callback_data="game_pubg"),
+            InlineKeyboardButton("🔫 کالاف", callback_data="game_cod")
+        ],
+        [
+            InlineKeyboardButton("🔥 فری فایر", callback_data="game_ff"),
+            InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_countries")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(
+        text=f"🛑 کشور انتخاب شده: {country}\n\nلطفا بازی مورد نظر را انتخاب کنید:",
+        reply_markup=reply_markup
+    )
+    
+    return GAME
+
+def show_dns(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+    
+    game_type = query.data.split('_')[1]
+    country = context.user_data.get('selected_country', 'نامشخص')
+    user_id = update.effective_user.id
+    
+    # تولید DNS منحصر به فرد
+    dns = generate_unique_dns(country)
+    
+    # آپدیت آمار
+    user_stats[user_id]['usage'] += 1
+    user_stats[user_id]['last_active'] = datetime.now()
+    user_stats[user_id]['last_country'] = country
+    
+    ACTIVITY_LOG.append({
+        'user_id': user_id,
+        'action': f'get_dns:{country}:{game_type}',
+        'time': datetime.now(),
+        'dns': dns
+    })
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 بازگشت به لیست کشورها", callback_data="back_to_countries")],
+        [InlineKeyboardButton("🔄 دریافت DNS جدید", callback_data=f"country_{country}")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    query.edit_message_text(
+        text=f"✅ DNS برای:\n\n"
+             f"🌍 کشور: {country}\n"
+             f"🎮 بازی: {'پابجی' if game_type == 'pubg' else 'کالاف' if game_type == 'cod' else 'فری فایر'}\n\n"
+             f"🔢 DNS:\n<code>{dns}</code>\n\n"
+             "⚠️ برای کپی کردن، روی DNS کلیک کنید.",
+        reply_markup=reply_markup,
+        parse_mode='HTML'
+    )
+    
+    return COUNTRY
+
+# --- توابع مدیریت پیشرفته ---
+def admin_panel(update: Update, context: CallbackContext) -> int:
+    keyboard = [
+        [InlineKeyboardButton("👤 مدیریت کاربران", callback_data="user_management")],
+        [InlineKeyboardButton("📊 آمار سیستم", callback_data="system_stats")],
+        [InlineKeyboardButton("🌍 مدیریت DNSها", callback_data="dns_management")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_countries")]
+    ]
+    
+    if update.callback_query:
+        update.callback_query.edit_message_text(
+            text="🛠 پنل مدیریت پیشرفته:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        update.message.reply_text(
+            "🛠 پنل مدیریت پیشرفته:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    return ADMIN_PANEL
+
+def user_management(update: Update, context: CallbackContext) -> int:
+    keyboard = [
+        [InlineKeyboardButton("⛔ مسدود کردن کاربر", callback_data="ban_user")],
+        [InlineKeyboardButton("✅ آزاد کردن کاربر", callback_data="unban_user")],
+        [InlineKeyboardButton("📜 لیست کاربران مسدود", callback_data="banned_list")],
+        [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
+    ]
+    
+    update.callback_query.edit_message_text(
+        text="👤 مدیریت کاربران:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return ADMIN_PANEL
+
+def ban_user(update: Update, context: CallbackContext) -> int:
+    update.callback_query.edit_message_text(
+        text="لطفا آی دی عددی کاربر را برای مسدود کردن ارسال کنید:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ انصراف", callback_data="user_management")]
+        ])
+    )
+    return BAN_USER
+
+def unban_user(update: Update, context: CallbackContext) -> int:
+    update.callback_query.edit_message_text(
+        text="لطفا آی دی عددی کاربر را برای آزاد کردن ارسال کنید:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ انصراف", callback_data="user_management")]
+        ])
+    )
+    return UNBAN_USER
+
+def process_ban(update: Update, context: CallbackContext) -> int:
+    try:
+        user_id = int(update.message.text)
+        BLOCKED_USERS.add(user_id)
+        
+        ACTIVITY_LOG.append({
+            'user_id': update.effective_user.id,
+            'action': f'banned:{user_id}',
+            'time': datetime.now()
+        })
+        
+        update.message.reply_text(
+            f"✅ کاربر {user_id} با موفقیت مسدود شد.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 بازگشت", callback_data="user_management")]
+            ])
+        )
+    except ValueError:
+        update.message.reply_text("⚠️ لطفا یک آی دی عددی معتبر وارد کنید!")
+    
+    return ADMIN_PANEL
+
+def process_unban(update: Update, context: CallbackContext) -> int:
+    try:
+        user_id = int(update.message.text)
+        if user_id in BLOCKED_USERS:
+            BLOCKED_USERS.remove(user_id)
+            
+            ACTIVITY_LOG.append({
+                'user_id': update.effective_user.id,
+                'action': f'unbanned:{user_id}',
+                'time': datetime.now()
+            })
+            
+            update.message.reply_text(
+                f"✅ کاربر {user_id} با موفقیت آزاد شد و می‌تواند از ربات استفاده کند.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="user_management")]
+                ])
+            )
+        else:
+            update.message.reply_text(
+                f"ℹ️ کاربر {user_id} از قبل مسدود نبوده است.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data="user_management")]
+                ])
+            )
+    except ValueError:
+        update.message.reply_text("⚠️ لطفا یک آی دی عددی معتبر وارد کنید!")
+    
+    return ADMIN_PANEL
+
+def show_banned_list(update: Update, context: CallbackContext) -> int:
+    if not BLOCKED_USERS:
+        text = "⭕ هیچ کاربری مسدود نشده است."
+    else:
+        text = "📜 لیست کاربران مسدود شده:\n\n" + "\n".join(str(user_id) for user_id in BLOCKED_USERS)
+    
+    update.callback_query.edit_message_text(
+        text=text,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 بازگشت", callback_data="user_management")]
+        ])
+    )
+    return ADMIN_PANEL
+
+def show_stats(update: Update, context: CallbackContext) -> int:
+    total_users = len(user_stats)
+    active_today = len([u for u in user_stats.values() 
+                       if u['last_active'].date() == datetime.now().date()])
+    banned_users = len(BLOCKED_USERS)
+    unique_dns_count = len(DNS_HISTORY)
+    
+    stats_text = (
+        f"📊 آمار سیستم:\n\n"
+        f"👥 کاربران کل: {total_users}\n"
+        f"🟢 کاربران فعال امروز: {active_today}\n"
+        f"🔴 کاربران مسدود: {banned_users}\n"
+        f"🌐 DNSهای منحصر به فرد تولید شده: {unique_dns_count}\n\n"
+        f"🔄 آخرین فعالیت‌ها:\n"
+    )
+    
+    for log in ACTIVITY_LOG[-5:]:
+        stats_text += f"{log['time'].strftime('%H:%M')} - {log['action']}\n"
+    
+    update.callback_query.edit_message_text(
+        text=stats_text,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 بروزرسانی", callback_data="system_stats")],
+            [InlineKeyboardButton("🔙 بازگشت", callback_data="admin_panel")]
+        ])
+    )
+    return ADMIN_PANEL
+
+# --- توابع کمکی ---
+def back_to_countries(update: Update, context: CallbackContext) -> int:
+    return show_countries(update, context)
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text('❌ عملیات لغو شد.')
+    return ConversationHandler.END
+
+def error_handler(update: Update, context: CallbackContext):
+    logger.error(msg="خطا در پردازش:", exc_info=context.error)
+    if update and update.message:
+        update.message.reply_text('⚠️ خطایی در پردازش درخواست رخ داد!')
+
+# --- تنظیمات اصلی ---
+def main():
+    TOKEN = "7917078197:AAGEsXwOlhcGsHryK87cx8VGPace1s_ewXo"  # توکن شما
+    updater = Updater(TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+    
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            PASSWORD: [MessageHandler(Filters.text & ~Filters.command, check_password)],
+            COUNTRY: [
+                CallbackQueryHandler(select_game, pattern='^country_'),
+                CallbackQueryHandler(admin_panel, pattern='^admin_panel$'),
+                CallbackQueryHandler(back_to_countries, pattern='^back_to_countries$')
+            ],
+            GAME: [
+                CallbackQueryHandler(show_dns, pattern='^game_'),
+                CallbackQueryHandler(back_to_countries, pattern='^back_to_countries$')
+            ],
+            ADMIN_PANEL: [
+                CallbackQueryHandler(user_management, pattern='^user_management$'),
+                CallbackQueryHandler(show_stats, pattern='^system_stats$'),
+                CallbackQueryHandler(show_banned_list, pattern='^banned_list$'),
+                CallbackQueryHandler(admin_panel, pattern='^admin_panel$'),
+                CallbackQueryHandler(ban_user, pattern='^ban_user$'),
+                CallbackQueryHandler(unban_user, pattern='^unban_user$'),
+                CallbackQueryHandler(back_to_countries, pattern='^back_to_countries$')
+            ],
+            BAN_USER: [
+                MessageHandler(Filters.text & ~Filters.command, process_ban),
+                CallbackQueryHandler(user_management, pattern='^user_management$')
+            ],
+            UNBAN_USER: [
+                MessageHandler(Filters.text & ~Filters.command, process_unban),
+                CallbackQueryHandler(user_management, pattern='^user_management$')
+            ],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    
+    dispatcher.add_handler(conv_handler)
+    dispatcher.add_error_handler(error_handler)
+    
+    logger.info("ربات در حال اجرا است...")
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
